@@ -266,7 +266,29 @@ PinholeCamera::PinholeCamera()
  , m_inv_K23(0.0)
  , m_noDistortion(true)
 {
+    // Yingfu ===start===
+    // printf("%f  %f\n", m_inv_K11, m_inv_K11); // Yingfu check whether this func is run
+    printf("\nATTENTION! Running Yingfu hard-coded undistortion!\n\n");
+    // Camera matrix
+    cv::Matx33d tempK;
+    tempK(0, 0) = 275.46015578667294; // 4.6115862106007575e+02; // 458.654; // 275.46015578667294;
+    tempK(0, 1) = 0;
+    tempK(0, 2) = 315.958384100568; // 3.6265929181685937e+02; // 367.215; // 315.958384100568;
+    tempK(1, 0) = 0;
+    tempK(1, 1) = 274.9948095922592; // 4.5975286598073296e+02; // 457.296; // 274.9948095922592;
+    tempK(1, 2) = 242.7123497822731; // 2.4852105668448124e+02; // 248.375; // 242.7123497822731;
+    tempK(2, 0) = 0;
+    tempK(2, 1) = 0;
+    tempK(2, 2) = 1;
+    camera_k_OPENCV = tempK;
 
+    cv::Vec4d tempD;
+    tempD(0) = -6.545154718304953e-06; // -2.9545645106987750e-01; // -0.28340811; // -6.545154718304953e-06;
+    tempD(1) = -0.010379525898159981; // 8.6623215640186171e-02; // 0.07395907; // -0.010379525898159981;
+    tempD(2) = 0.014935312423953146; // 2.0132892276082517e-06; // 0.00019359; // 0.014935312423953146;
+    tempD(3) = -0.005639061406567785; // 1.3924531371276508e-05; // 1.76187114e-05; // -0.005639061406567785;
+    camera_d_OPENCV = tempD;
+    // Yingfu ===end===
 }
 
 PinholeCamera::PinholeCamera(const std::string& cameraName,
@@ -440,6 +462,32 @@ PinholeCamera::liftSphere(const Eigen::Vector2d& p, Eigen::Vector3d& P) const
     P.normalize();
 }
 
+void
+PinholeCamera::uzhfpv_undistortion(const Eigen::Vector2d& p, Eigen::Vector3d& P) const
+{
+    // Determine what camera parameters we should use
+    cv::Matx33d camK = camera_k_OPENCV;
+    cv::Vec4d camD = camera_d_OPENCV;
+
+    // Convert to opencv format
+    cv::Mat mat(1, 2, CV_32F);
+    mat.at<float>(0, 0) = p(0);
+    mat.at<float>(0, 1) = p(1);
+    mat = mat.reshape(2); // Nx1, 2-channel
+
+    // Undistort it!
+    // cv::undistortPoints(mat, mat, camK, camD); // for EuRoC
+    cv::fisheye::undistortPoints(mat, mat, camK, camD); // for uzh fpv
+
+    // printf("%f  %f  %f  %f\n", camera_k_OPENCV(0, 0), camera_k_OPENCV(1, 1), camera_k_OPENCV(0, 2), camera_k_OPENCV(1, 2)); // Yingfu
+    // printf("%f  %f  %f  %f\n", camera_d_OPENCV(0), camera_d_OPENCV(1), camera_d_OPENCV(2), camera_d_OPENCV(3)); // Yingfu
+
+    mat = mat.reshape(1); // Nx2, 1-channel
+
+    // Obtain a projective ray
+    P << mat.at<float>(0, 0), mat.at<float>(0, 1), 1.0;
+}
+
 /**
  * \brief Lifts a point from the image plane to its projective ray
  *
@@ -449,64 +497,77 @@ PinholeCamera::liftSphere(const Eigen::Vector2d& p, Eigen::Vector3d& P) const
 void
 PinholeCamera::liftProjective(const Eigen::Vector2d& p, Eigen::Vector3d& P) const
 {
-    double mx_d, my_d,mx2_d, mxy_d, my2_d, mx_u, my_u;
-    double rho2_d, rho4_d, radDist_d, Dx_d, Dy_d, inv_denom_d;
-    //double lambda;
+    Eigen::Vector3d PP;
+    uzhfpv_undistortion(p, PP);
+    // printf("%f  %f  %f\n", PP[0], PP[1], PP[2]); // Yingfu
+    
+    // Yingfu commented: 
+    // NOTE seems that the following code is the only part that uses the params in cam0_pinhole.yaml
 
-    // Lift points to normalised plane
-    mx_d = m_inv_K11 * p(0) + m_inv_K13;
-    my_d = m_inv_K22 * p(1) + m_inv_K23;
+    // double mx_d, my_d,mx2_d, mxy_d, my2_d, mx_u, my_u;
+    // double rho2_d, rho4_d, radDist_d, Dx_d, Dy_d, inv_denom_d;
+    // //double lambda;
 
-    if (m_noDistortion)
-    {
-        mx_u = mx_d;
-        my_u = my_d;
-    }
-    else
-    {
-        if (0)
-        {
-            double k1 = mParameters.k1();
-            double k2 = mParameters.k2();
-            double p1 = mParameters.p1();
-            double p2 = mParameters.p2();
+    // // printf("%f  %f\n", p[0], p[1]);
+    // // printf("\n"); // Yingfu
 
-            // Apply inverse distortion model
-            // proposed by Heikkila
-            mx2_d = mx_d*mx_d;
-            my2_d = my_d*my_d;
-            mxy_d = mx_d*my_d;
-            rho2_d = mx2_d+my2_d;
-            rho4_d = rho2_d*rho2_d;
-            radDist_d = k1*rho2_d+k2*rho4_d;
-            Dx_d = mx_d*radDist_d + p2*(rho2_d+2*mx2_d) + 2*p1*mxy_d;
-            Dy_d = my_d*radDist_d + p1*(rho2_d+2*my2_d) + 2*p2*mxy_d;
-            inv_denom_d = 1/(1+4*k1*rho2_d+6*k2*rho4_d+8*p1*my_d+8*p2*mx_d);
+    // // Lift points to normalised plane
+    // mx_d = m_inv_K11 * p(0) + m_inv_K13;
+    // my_d = m_inv_K22 * p(1) + m_inv_K23;
 
-            mx_u = mx_d - inv_denom_d*Dx_d;
-            my_u = my_d - inv_denom_d*Dy_d;
-        }
-        else
-        {
-            // Recursive distortion model
-            int n = 8;
-            Eigen::Vector2d d_u;
-            distortion(Eigen::Vector2d(mx_d, my_d), d_u);
-            // Approximate value
-            mx_u = mx_d - d_u(0);
-            my_u = my_d - d_u(1);
+    // if (m_noDistortion)
+    // {
+    //     mx_u = mx_d;
+    //     my_u = my_d;
+    // }
+    // else
+    // {
+    //     if (0)
+    //     {
+    //         double k1 = mParameters.k1();
+    //         double k2 = mParameters.k2();
+    //         double p1 = mParameters.p1();
+    //         double p2 = mParameters.p2();
 
-            for (int i = 1; i < n; ++i)
-            {
-                distortion(Eigen::Vector2d(mx_u, my_u), d_u);
-                mx_u = mx_d - d_u(0);
-                my_u = my_d - d_u(1);
-            }
-        }
-    }
+    //         // Apply inverse distortion model
+    //         // proposed by Heikkila
+    //         mx2_d = mx_d*mx_d;
+    //         my2_d = my_d*my_d;
+    //         mxy_d = mx_d*my_d;
+    //         rho2_d = mx2_d+my2_d;
+    //         rho4_d = rho2_d*rho2_d;
+    //         radDist_d = k1*rho2_d+k2*rho4_d;
+    //         Dx_d = mx_d*radDist_d + p2*(rho2_d+2*mx2_d) + 2*p1*mxy_d;
+    //         Dy_d = my_d*radDist_d + p1*(rho2_d+2*my2_d) + 2*p2*mxy_d;
+    //         inv_denom_d = 1/(1+4*k1*rho2_d+6*k2*rho4_d+8*p1*my_d+8*p2*mx_d);
 
+    //         mx_u = mx_d - inv_denom_d*Dx_d;
+    //         my_u = my_d - inv_denom_d*Dy_d;
+    //     }
+    //     else
+    //     {
+    //         // Recursive distortion model
+    //         int n = 8;
+    //         Eigen::Vector2d d_u;
+    //         distortion(Eigen::Vector2d(mx_d, my_d), d_u);
+    //         // Approximate value
+    //         mx_u = mx_d - d_u(0);
+    //         my_u = my_d - d_u(1);
+
+    //         for (int i = 1; i < n; ++i)
+    //         {
+    //             distortion(Eigen::Vector2d(mx_u, my_u), d_u);
+    //             mx_u = mx_d - d_u(0);
+    //             my_u = my_d - d_u(1);
+    //         }
+    //     }
+    // }
+    
     // Obtain a projective ray
-    P << mx_u, my_u, 1.0;
+    // P << mx_u, my_u, 1.0;
+    // Yingfu commented end
+
+    P << PP[0], PP[1], 1.0;
 }
 
 

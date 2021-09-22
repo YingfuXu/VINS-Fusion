@@ -89,6 +89,15 @@ public:
     void liftProjective(const Eigen::Vector2d& p, Eigen::Vector3d& P) const;
     //%output P
 
+    // start===Yingfu hard-coded undistortion for uzhfpv
+    void uzhfpv_undistortion(const Eigen::Vector2d& p, Eigen::Vector3d& P) const;
+    //%output P
+    /// Camera intrinsics in OpenCV format
+    cv::Matx33d camera_k_OPENCV;
+    /// Camera distortion in OpenCV format
+    cv::Vec4d camera_d_OPENCV;
+    // end===Yingfu hard-coded undistortion for uzhfpv
+
     // Projects 3D points to the image plane (Pi function)
     void spaceToPlane(const Eigen::Vector3d& P, Eigen::Vector2d& p) const;
     //%output p

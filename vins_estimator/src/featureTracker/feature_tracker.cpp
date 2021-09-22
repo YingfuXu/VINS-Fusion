@@ -395,8 +395,17 @@ vector<cv::Point2f> FeatureTracker::undistortedPts(vector<cv::Point2f> &pts, cam
     {
         Eigen::Vector2d a(pts[i].x, pts[i].y);
         Eigen::Vector3d b;
+
+        // printf("%f  %f\n", pts[i].x, pts[i].y); // Yingfu
+
         cam->liftProjective(a, b);
         un_pts.push_back(cv::Point2f(b.x() / b.z(), b.y() / b.z()));
+
+        // printf("%f  %f  %f\n\n", b[0], b[1], b[2]); // Yingfu
+
+        // cam->uzhfpv_undistortion(a, b);
+        // printf("%f  %f  %f\n", b[0], b[1], b[2]); // Yingfu
+        // printf("\n");
     }
     return un_pts;
 }
