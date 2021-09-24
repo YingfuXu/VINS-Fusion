@@ -1,0 +1,11 @@
+        if(inputImageCnt % 1 == 0) // % 2 in estimator.cpp
+        {
+            mBuf.lock();
+            featureBuf.push(make_pair(t, featureFrame));
+            mBuf.unlock();
+        }
+1. above to run in frame rate
+2. max_solver_time: 0.0333 // to run in real time with 30 Hz images
+3. hard-coded undistortion for cam0_pinhole
+4. the output trajectory file .csv to .txt and data sequences and time stamp and data percision
+5. imu parameters: UZH FPV
